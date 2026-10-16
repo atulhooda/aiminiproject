@@ -127,24 +127,15 @@ The diagram follows the conceptual order. In the code, CHECK_CONSTRAINTS validat
 
 ### User interface
 
-The frontend is a single-page React app with a canvas renderer. It has three pages and a Demo Mode:
+The web app is one simple screen built around the **Urban Fire** scenario:
 
-* **Command Center** has two views, switched with the **Simple view / Advanced view** toggle in the header (the choice is remembered).
-  * **Simple view** (default): the large disaster map, a one-line agent-cycle strip, four key numbers (rescued, need help, critical, replans), a plain-language "What the AI is doing" feed with only the key moments, the victim priority list, and one control row with one-click disaster buttons (Block a road, Start a fire, Add a victim, Break an ambulance, Cut hospital beds) that auto-target an active route.
-  * **Advanced view**: every detail, laid out as follows.
-  * Top: mission status bar, a live strip of the 8 agent-cycle phases, and an alert banner.
-  * Left: animated disaster map. It shows units, victims, fire, water, debris, hidden-hazard markers and planned paths. A search overlay shows explored and frontier cells, and replans are animated.
-  * Centre: tabs for the Decision Log, the Mission Plan (HTN tree), the CSP Solver, Search and State.
-  * Right: statistics tiles, hospital capacity, the victim priority list with a per-factor explanation, and resources.
-  * Bottom: Play / Pause / Step / Reset / Speed controls, scenario and algorithm selectors, and map overlay toggles. A DISASTER EVENT panel has Block road, Start fire, Add victim, Remove ambulance, Reduce hospital capacity and New emergency; each event either auto-targets an active route or applies to a clicked cell. There is also a map editor brush (paint road, building, debris, fire or water) and information about the last search algorithm run.
-* **Algorithm Lab**
-  * BFS vs. Greedy vs. A* on the same map, with animated explored cells, frontier and path. Unit profile, heuristic and danger-aware costs sit under **Options**.
-  * A results table (path cost, steps, nodes explored, time, optimal?) and comparison bar charts.
-  * Two collapsible "More" sections: a 100-query benchmark, and an online-search comparison of A* (known map), repeated A* and LRTA* with an adjustable sensor radius.
-* **AI Concepts**: explains where each syllabus concept is used in the project, with live numbers. This includes the partial EXTRACT_ONLY plan, the shared-trip detour rule and critical pre-emption.
-* **Demo Mode**: loads the `DEMO` scenario and plays it automatically with narration captions. The captions cover the situation report, goal formulation, the CSP allocation and A* routes. They then cover the aftershock road block at tick 9, its detection and replanning, the fire at tick 24, and the new critical victim at tick 34; that caption reports the CSP's actual decision, often EXTRACT_ONLY when no ALS ambulance is free. Last come the hospital capacity cut at tick 48, an "autonomous completion" caption from tick 56, and completion at tick 97. The demo ends with a final statistics report, which also lists "Victims never discovered" when any remain. At the default pacing it takes roughly 2.5 minutes: about 70 s of caption pauses plus the ticks themselves.
+* **Map:** the burning city, ambulances, rescue teams, victims and hospitals, with each unit's planned route drawn as a dashed line.
+* **Numbers:** victims rescued, victims still waiting, and how many times the AI replanned.
+* **How the AI works:** Sense → Decide (CSP) → Plan (A* search) → Act and replan.
+* **What the AI is doing:** a plain-language feed of its key decisions and results.
+* **Controls:** Start/Pause, Restart, and two buttons to make it harder: **Start a new fire** and **Block a road**. Each one forces the AI to detect the change and replan live.
 
-The replanning alert banner appears only for user or scenario events, or for changes that invalidate a plan. Natural fire spread or flood rise that affects no plan is only logged.
+The other scenarios (Earthquake, Flood, Demo, Custom) and the Algorithm Lab still exist in the backend and its REST API and tests, but the simplified UI only uses the fire scenario.
 
 ---
 
