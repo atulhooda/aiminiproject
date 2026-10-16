@@ -46,6 +46,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) })
 
+/** What the client did to a simulation, in order - enough to rebuild it exactly. */
+export type JournalEntry =
+  | { kind: 'steps'; n: number }
+  | { kind: 'event'; type: EventType; target: Pos | null; params: Record<string, unknown> }
+  | { kind: 'algorithm'; algorithm: Algorithm }
+
 export interface LabSource {
   scenario: string
   session_id?: string | null
@@ -56,6 +62,8 @@ export const api = {
 
   createSimulation: (scenario: string, algorithm: Algorithm, custom?: CustomConfig) =>
     post<Snapshot>('/api/simulations', { scenario, algorithm, custom: custom ?? null }),
+  replay: (scenario: string, algorithm: Algorithm, custom: CustomConfig | undefined, journal: JournalEntry[]) =>
+    post<Snapshot>('/api/simulations/replay', { scenario, algorithm, custom: custom ?? null, journal }),
   getSimulation: (id: string, since: number) => request<Snapshot>(`/api/simulations/${id}?since=${since}`),
   step: (id: string, since: number, steps = 1) => post<Snapshot>(`/api/simulations/${id}/step`, { steps, since }),
   reset: (id: string) => post<Snapshot>(`/api/simulations/${id}/reset`, {}),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '../services/api'
+import { api, ApiError, type JournalEntry } from '../services/api'
 import type { Algorithm, CustomConfig, EventType, LogEntry, Pos, SearchTrace, Snapshot } from '../types/api'
 import type { Flash, ReplanAnim } from '../simulation/renderer'
 import { unitColors } from '../simulation/theme'
@@ -68,6 +68,9 @@ export function useSimulation() {
 
   const snapRef = useRef<Snapshot | null>(null)
   const seqRef = useRef(0)
+  // Everything done to the current simulation, so it can be rebuilt if the
+  // server loses it (restart, or a serverless request on another instance).
+  const journalRef = useRef<{ scenario: string; algorithm: Algorithm; custom?: CustomConfig; entries: JournalEntry[] } | null>(null)
   const queueRef = useRef<Promise<unknown>>(Promise.resolve())
   const intervalRef = useRef(BASE_INTERVAL)
   const holdUntilRef = useRef(0)
@@ -175,6 +178,40 @@ export function useSimulation() {
     setPlaying(false)
   }, [])
 
+  const record = useCallback((entry: JournalEntry) => {
+    const j = journalRef.current
+    if (!j) return
+    const last = j.entries.at(-1)
+    if (entry.kind === 'steps' && last?.kind === 'steps') last.n += entry.n
+    else j.entries.push(entry)
+  }, [])
+
+  /** Run `op` on the current session; if the server lost it, replay the journal and retry once. */
+  const withSession = useCallback(
+    async (op: (id: string, since: number) => Promise<Snapshot>): Promise<Snapshot> => {
+      for (let attempt = 0; ; attempt++) {
+        const id = snapRef.current?.session_id
+        if (!id) throw new Error('No simulation loaded')
+        try {
+          return await op(id, seqRef.current)
+        } catch (e) {
+          if (!(e instanceof ApiError)) throw e
+          const j = journalRef.current
+          if (e.status === 404 && j) {
+            const rebuilt = await api.replay(j.scenario, j.algorithm, j.custom, j.entries)
+            apply(rebuilt, { fresh: true })
+            return await op(rebuilt.session_id, seqRef.current)
+          }
+          // Server briefly unreachable (restarting / cold start): wait and try again.
+          const transient = e.status === 0 || e.status >= 500
+          if (!transient || attempt >= 5) throw e
+          await sleep(1000 * (attempt + 1))
+        }
+      }
+    },
+    [apply],
+  )
+
   const create = useCallback(
     async (scenario: string, algorithm: Algorithm, custom?: CustomConfig) => {
       setPlaying(false)
@@ -182,6 +219,7 @@ export function useSimulation() {
       setReaction(null)
       try {
         const next = await enqueue(() => api.createSimulation(scenario, algorithm, custom))
+        journalRef.current = { scenario, algorithm, custom, entries: [] }
         apply(next, { fresh: true })
         setError(null)
         return next
@@ -199,14 +237,15 @@ export function useSimulation() {
     const id = snapRef.current?.session_id
     if (!id) return null
     try {
-      const next = await enqueue(() => api.step(id, seqRef.current))
+      const next = await enqueue(() => withSession((sid, since) => api.step(sid, since)))
+      record({ kind: 'steps', n: 1 })
       apply(next, { moved: true })
       return next
     } catch (e) {
       handleError(e)
       return null
     }
-  }, [apply, enqueue, handleError])
+  }, [apply, enqueue, handleError, record, withSession])
 
   const reset = useCallback(async () => {
     const id = snapRef.current?.session_id
@@ -214,25 +253,27 @@ export function useSimulation() {
     setPlaying(false)
     setReaction(null)
     try {
-      const next = await enqueue(() => api.reset(id))
+      const next = await enqueue(() => withSession((sid) => api.reset(sid)))
+      if (journalRef.current) journalRef.current.entries = []
       apply(next, { fresh: true })
     } catch (e) {
       handleError(e)
     }
-  }, [apply, enqueue, handleError])
+  }, [apply, enqueue, handleError, withSession])
 
   const setAlgorithm = useCallback(
     async (algorithm: Algorithm) => {
       const id = snapRef.current?.session_id
       if (!id) return
       try {
-        const next = await enqueue(() => api.setAlgorithm(id, algorithm, seqRef.current))
+        const next = await enqueue(() => withSession((sid, since) => api.setAlgorithm(sid, algorithm, since)))
+        record({ kind: 'algorithm', algorithm })
         apply(next, {})
       } catch (e) {
         handleError(e)
       }
     },
-    [apply, enqueue, handleError],
+    [apply, enqueue, handleError, record, withSession],
   )
 
   const trigger = useCallback(
@@ -240,7 +281,8 @@ export function useSimulation() {
       const id = snapRef.current?.session_id
       if (!id) return null
       try {
-        const next = await enqueue(() => api.triggerEvent(id, type, seqRef.current, target, params))
+        const next = await enqueue(() => withSession((sid, since) => api.triggerEvent(sid, type, since, target, params)))
+        record({ kind: 'event', type, target: target ?? null, params })
         apply(next, {})
         setError(null)
         return next
@@ -249,7 +291,7 @@ export function useSimulation() {
         return null
       }
     },
-    [apply, enqueue],
+    [apply, enqueue, record, withSession],
   )
 
   const setSpeed = useCallback((s: number) => {

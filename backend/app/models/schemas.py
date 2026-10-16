@@ -30,6 +30,13 @@ class CreateSimulationRequest(BaseModel):
     custom: CustomScenarioConfig | None = None
 
 
+class ReplayRequest(CreateSimulationRequest):
+    """Rebuild a simulation from what the client did, in order. The engine is
+    deterministic for a seed, so replaying gives back the same state."""
+
+    journal: list[dict[str, Any]] = Field(default_factory=list, max_length=2000)
+
+
 class StepRequest(BaseModel):
     steps: int = Field(1, ge=1, le=50)
     since: int = 0

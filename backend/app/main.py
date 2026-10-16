@@ -21,6 +21,7 @@ from app.models.schemas import (
     EventRequest,
     LabSource,
     OnlineRequest,
+    ReplayRequest,
     StepRequest,
 )
 from app.search import ALGORITHM_LABELS, ALGORITHMS
@@ -86,6 +87,36 @@ def create_simulation(req: CreateSimulationRequest) -> dict:
     except (ValueError, StopIteration) as exc:
         raise _bad_request(exc) from exc
     return snapshot(sim, sid)
+
+
+@app.post("/api/simulations/replay")
+def replay_simulation(req: ReplayRequest) -> dict:
+    """Recreate a lost simulation (server restart, or a request that reached a
+    different serverless instance) by replaying the client's journal."""
+    try:
+        sid, sim = sessions.create(req.scenario, req.seed, req.algorithm, req.custom.model_dump() if req.custom else None)
+    except (ValueError, StopIteration) as exc:
+        raise _bad_request(exc) from exc
+    with sessions.lock(sid):
+        for entry in req.journal:
+            kind = entry.get("kind")
+            if kind == "steps":
+                for _ in range(max(0, min(int(entry.get("n", 0)), 5000))):
+                    sim.step()
+            elif kind == "algorithm":
+                try:
+                    sim.set_algorithm(str(entry.get("algorithm", "")))
+                except ValueError:
+                    pass
+            elif kind == "event":
+                try:
+                    etype = EventType(str(entry.get("type", "")).upper())
+                    target = entry.get("target")
+                    if etype in USER_EVENT_TYPES:
+                        sim.inject(DisasterEvent(etype, tuple(target) if target else None, entry.get("params") or {}, source="USER"))
+                except (ValueError, EventError):
+                    pass  # the original request failed the same way
+        return snapshot(sim, sid, 0)
 
 
 @app.get("/api/simulations/{sid}")

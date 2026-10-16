@@ -89,3 +89,22 @@ def test_algorithm_lab_endpoints(client):
 
     bad = client.post("/api/lab/compare", json={**body, "goal": [0, 0]})
     assert bad.status_code == 400
+
+
+def test_replay_rebuilds_an_identical_simulation(client):
+    snap = client.post("/api/simulations", json={"scenario": "URBAN_FIRE"}).json()
+    sid = snap["session_id"]
+    journal = []
+    for _ in range(12):
+        snap = client.post(f"/api/simulations/{sid}/step", json={}).json()
+    journal.append({"kind": "steps", "n": 12})
+    snap = client.post(f"/api/simulations/{sid}/events", json={"type": "BLOCK_ROAD"}).json()
+    journal.append({"kind": "event", "type": "BLOCK_ROAD", "target": None, "params": {}})
+    for _ in range(8):
+        snap = client.post(f"/api/simulations/{sid}/step", json={}).json()
+    journal.append({"kind": "steps", "n": 8})
+
+    rebuilt = client.post("/api/simulations/replay", json={"scenario": "URBAN_FIRE", "journal": journal}).json()
+    assert rebuilt["session_id"] != sid
+    for key in ("tick", "grid", "victims", "ambulances", "teams", "hospitals"):
+        assert rebuilt[key] == snap[key], key
