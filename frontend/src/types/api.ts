@@ -48,6 +48,8 @@ export interface Victim {
   reported_tick: number
   rescued_tick: number | null
   deceased_tick: number | null
+  ml_eta: number | null
+  ml_health_at_rescue: number | null
 }
 
 export interface Unit {
@@ -336,6 +338,7 @@ export interface Snapshot {
   search_history: SearchSummary[]
   last_csp: CspReport | null
   stats: Stats
+  ml: { type: string; trained_on: number; test_mae: number; test_baseline_mae: number; test_r2: number } | null
   state: WorldStateView
   events: EnvReport[]
   last_actions: { type: string; unit_id: string; success: boolean; message: string }[]

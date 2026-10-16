@@ -125,6 +125,8 @@ class Victim:
     priority: float = 0.0
     priority_breakdown: list[dict] = field(default_factory=list)
     required_resources: list[str] = field(default_factory=list)  # maintained by the agent
+    ml_eta: float | None = None  # ML-predicted ticks until rescue
+    ml_health_at_rescue: float | None = None  # projected health (%) when help arrives
 
     @property
     def is_active(self) -> bool:

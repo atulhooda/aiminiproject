@@ -28,6 +28,7 @@ from enum import Enum
 
 from app.agents.decision_log import DecisionLog
 from app.agents.priority import compute_priority
+from app.ml import risk as ml_risk
 from app.csp.allocation import (
     DEFER,
     HOLD,
@@ -460,6 +461,7 @@ class DisasterResponseAgent:
             n = assess_needs(v, self.belief, self.oracle, anchors)
             self.needs[v.id] = n
             v.required_resources = n.describe()
+        self._add_ml_risk(world, active)
         self.goals = sorted(active, key=lambda v: (-v.priority, v.id))
         critical = [v for v in active if v.severity == Severity.CRITICAL]
 
@@ -491,6 +493,24 @@ class DisasterResponseAgent:
             f"{len(active)} goal(s), {len(critical)} critical" + (f"; top {top.id} ({top.priority:.1f})" if top else ""),
         )
         return self.goals
+
+    def _add_ml_risk(self, world: World, active: list) -> None:
+        """Machine-learning step: predict each waiting victim's wait for rescue and
+        add priority points to those whose health is projected to fall too low."""
+        queue = sorted(
+            (v for v in active if v.status in (VictimStatus.WAITING, VictimStatus.ASSIGNED)),
+            key=lambda v: (-v.priority, v.id),
+        )
+        free = sum(1 for a in world.ambulances.values() if a.available and self._is_idle(a.id))
+        for v in active:
+            v.ml_eta = v.ml_health_at_rescue = None
+        for pos, v in enumerate(queue):
+            r = ml_risk.assess(v, world, self.belief, pos, free)
+            if r is None:
+                return
+            v.ml_eta, v.ml_health_at_rescue = round(r.eta, 1), round(r.health_at_rescue, 1)
+            v.priority = round(v.priority + r.points, 1)
+            v.priority_breakdown.append({"factor": "ML risk", "points": round(r.points, 1), "detail": r.detail()})
 
     # --------------------------------------------------- CHECK CONSTRAINTS
     def check_constraints(self, world: World) -> list[Issue]:

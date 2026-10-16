@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapCanvas } from './components/MapCanvas'
 import { useSimulation } from './hooks/useSimulation'
 import type { Overlays } from './simulation/renderer'
-import type { LogEntry, Pos } from './types/api'
+import type { LogEntry, Pos, Snapshot } from './types/api'
 
 // One scenario, one screen: the urban fire, planned by A*.
 const SCENARIO = 'URBAN_FIRE'
@@ -105,11 +105,14 @@ export default function App() {
             <div className="panel-title mb-1">How the AI works</div>
             <ol className="list-decimal space-y-0.5 pl-5">
               <li><b>Sense</b> – see the fire, roads and victims</li>
+              <li><b>Predict</b> – ML model guesses each victim's wait; at-risk ones go up the list</li>
               <li><b>Decide</b> – rank victims, assign units (CSP)</li>
               <li><b>Plan</b> – find the safest road (A* search)</li>
               <li><b>Act &amp; replan</b> – if fire blocks a road, plan again</li>
             </ol>
           </div>
+
+          <MlPanel snap={snap} />
 
           <div className="panel flex min-h-0 flex-1 flex-col p-3">
             <div className="panel-title mb-1.5">What the AI is doing</div>
@@ -142,6 +145,35 @@ export default function App() {
         </button>
         {sim.error && <span className="ml-auto text-sm text-red-300">{sim.error}</span>}
       </footer>
+    </div>
+  )
+}
+
+function MlPanel({ snap }: { snap: Snapshot }) {
+  const rows = snap.victims
+    .filter((v) => v.ml_eta !== null && v.ml_health_at_rescue !== null)
+    .sort((a, b) => (a.ml_health_at_rescue ?? 0) - (b.ml_health_at_rescue ?? 0))
+    .slice(0, 4)
+  return (
+    <div className="panel p-3 text-sm">
+      <div className="panel-title mb-1">ML prediction</div>
+      {rows.length === 0 && <div className="text-slate-500">Predictions appear once the rescue starts.</div>}
+      {rows.map((v) => {
+        const atRisk = (v.ml_health_at_rescue ?? 100) < 30
+        return (
+          <div key={v.id} className="flex justify-between gap-2">
+            <span className="text-slate-300">
+              <b>{v.id}</b>: help in ~{Math.round(v.ml_eta ?? 0)} steps, health then ~{Math.round(v.ml_health_at_rescue ?? 0)}%
+            </span>
+            <span className={atRisk ? 'text-red-300' : 'text-emerald-300'}>{atRisk ? 'at risk' : 'ok'}</span>
+          </div>
+        )
+      })}
+      {snap.ml && (
+        <div className="mt-1.5 text-xs text-slate-500">
+          Linear regression trained on {snap.ml.trained_on.toLocaleString()} examples · average error {Math.round(snap.ml.test_mae)} steps (vs {Math.round(snap.ml.test_baseline_mae)} for a plain average guess)
+        </div>
+      )}
     </div>
   )
 }

@@ -157,17 +157,11 @@ Demo Mode presents this as a narrated end-to-end run and ends with a statistics 
 
 ---
 
-## No machine learning, LLMs, external AI APIs or path-finding libraries
+## AI used: classical algorithms plus one small ML model
 
-This was verified by inspecting the dependency files and every import in the backend:
-
-* `backend/requirements.txt`: `fastapi`, `uvicorn[standard]`, `pydantic`. This is the web server and request validation only.
-* `requirements-dev.txt`: the above plus `pytest` and `httpx`, for testing only.
-* `frontend/package.json`: `react` and `react-dom`, with build tooling (`vite`, `@vitejs/plugin-react`, `typescript`, `tailwindcss`, `@tailwindcss/vite`, `@types/*`).
-* Every import in `backend/app/` is from the Python standard library (`heapq`, `collections`, `itertools`, `dataclasses`, `enum`, `math`, `random`, `statistics`, `time`, `threading`, `uuid`, `datetime`, `pathlib`, `typing`, `abc`), from FastAPI/pydantic in the web layer only (`main.py`, `models/schemas.py`), or from the project itself.
-* A search for `networkx`, `numpy`, `scipy`, `sklearn`, `torch`, `tensorflow`, `openai`, `anthropic`, `langchain` and `pathfinding` across `backend/`, `tests/`, `requirements-dev.txt` and `frontend/package.json` returns no matches.
-
-Every search, CSP, planning and agent algorithm is implemented from scratch in this repository. No component is learned from data, and no external AI service is called.
+* Every search, CSP, planning and agent algorithm is implemented from scratch in this repository.
+* One component is learned from data: a linear-regression model (`backend/app/ml/`) that predicts each victim's wait for rescue and adds an "ML risk" priority factor. It is also written from scratch and trained on simulated disasters.
+* No LLMs, external AI APIs, ML libraries (numpy, scikit-learn, torch, tensorflow) or path-finding libraries are used. `backend/requirements.txt` lists only `fastapi`, `uvicorn[standard]` and `pydantic`.
 
 ---
 

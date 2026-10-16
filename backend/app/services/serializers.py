@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.environment.mobility import PROFILES
+from app.ml.risk import model_info as ml_model_info
 from app.environment.simulator import Simulation
 from app.models.entities import Ambulance, Hospital, Pos, RescueTeam, SafeZone, Victim
 
@@ -27,6 +28,8 @@ def victim_dict(v: Victim) -> dict:
         "rescue_time": v.rescue_time,
         "rescue_progress": v.rescue_progress,
         "required_resources": v.required_resources,
+        "ml_eta": v.ml_eta,
+        "ml_health_at_rescue": v.ml_health_at_rescue,
         "carrier_id": v.carrier_id,
         "destination_id": v.destination_id,
         "assigned_units": v.assigned_units,
@@ -129,6 +132,7 @@ def snapshot(sim: Simulation, session_id: str, since: int = 0) -> dict:
         "search_history": list(agent.search_history)[:12],
         "last_csp": agent.last_csp,
         "stats": sim.statistics(),
+        "ml": ml_model_info(),
         "state": sim.state().to_dict(),
         "events": sim.events[-40:],
         "last_actions": sim.last_actions,
